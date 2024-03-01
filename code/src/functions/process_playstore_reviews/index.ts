@@ -84,7 +84,7 @@ export const run = async (events: any[]) => {
         console.error(`Error while creating timeline entry: ${postResp.message}`);
         continue;
       }
-      const reviewText = `Ticket created from Playstore review ${review.url}\n\n${review.text}`;
+      let reviewText = `Ticket created from Playstore review ${review.url}\n\n${review.text}`;
       const reviewTitle = review.title || `Ticket created from Playstore review ${review.url}`;
       const reviewID = review.id;
       const systemPrompt = `You are an expert at labelling a given Google Play Store Review as bug, feature_request, question or feedback and tagging. You are given a review provided by a user for the app ${inputs['app_id']}. You have to label the review as bug, feature_request, question or feedback also you have to tag the review with atmost three tags tags should be of atmost two words. The output should be a JSON with fields "category" and "reason". The "category" field should be one of "bug", "feature_request", "question" or "feedback". The "reason" field should be a string explaining the reason for the category.The "tag" field should have contain a list of tags also there should be one more field in json of "tag based sentiment" which contains the sentiment of the review on the basis of tags and one field of "stars" which contains the no. of stars based on the content of the review  \n\nReview: {review}\n\nOutput:`;
@@ -96,7 +96,22 @@ export const run = async (events: any[]) => {
       } catch (err) {
         console.error(`Error while calling LLM: ${err}`);
       }
-      let tagsToApply = [];
+      let tagsToApply : Array<string> = [];
+      // let tagToApplyID : Array<string> = [];
+      if ('tags' in llmResponse) {
+        tagsToApply = llmResponse['tags'] as Array<string>;
+        
+        for (let i = 0; i < tagsToApply.length; i++) {
+          const tag = tagsToApply[i];
+          if (!(tag in tags)) {
+            await apiUtil.createTag({
+              name: tag as string,
+              description: "created from review using LLM"
+            });
+          }
+        }
+      }
+
       let inferredCategory = 'failed_to_infer_category';
       if ('category' in llmResponse) {
         inferredCategory = llmResponse['category'] as string;
@@ -104,11 +119,19 @@ export const run = async (events: any[]) => {
           inferredCategory = 'failed_to_infer_category';
         }
       }
+
+      if ('reason' in llmResponse) {
+        reviewText = llmResponse['reason'] as string;
+      }
+      
       // Create a ticket with title as review title and description as review text.
       const createTicketResp = await apiUtil.createTicket({
         title: reviewTitle,
+
         tags: [{id: tags[inferredCategory].id}],
+        
         body: reviewText,
+        
         type: publicSDK.WorkType.Ticket,
         owned_by: [inputs['default_owner_id']],
         applies_to_part: inputs['default_part_id'],

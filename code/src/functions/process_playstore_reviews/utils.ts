@@ -113,4 +113,22 @@ export class ApiUtils {
     const createTimelineResponse: HTTPResponse = await this.createTimeLine(createPayload);
     return createTimelineResponse;
   }
+
+  async createTag(payload: publicSDK.TagsCreateRequest): Promise<HTTPResponse> {
+    try {
+      const response: AxiosResponse = await this.devrevSdk.tagsCreate(payload);
+      return { data: response.data, message: 'Tag created successfully', success: true};
+    }catch (error: any) {
+      if (error.response) {
+        const err = `Failed to update Tag. Err: ${JSON.stringify(error.response.data)}, Status: ${
+          error.response.status
+        }`;
+        return { ...defaultResponse, message: err};
+      } else {
+        return { ...defaultResponse, message: error.message };
+      }
+    }
+  }
+
+
 }
